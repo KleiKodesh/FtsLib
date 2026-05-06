@@ -21,9 +21,34 @@ namespace FtsLib.Seforim
     /// </summary>
     internal static class SnippetPipeline
     {
-        // One SnippetBuilder per call — not thread-safe, but SeforimIndex is
-        // documented as single-threaded. Reuse avoids repeated allocation.
-        private static readonly SnippetBuilder _builder = new SnippetBuilder();
+        // One SnippetBuilder per thread — not safe to share across threads because
+        // SnippetBuilder reuses internal data structures across calls. [ThreadStatic]
+        // gives each thread its own instance with zero per-call allocation overhead.
+        //
+        // Default values are tuned for dense Hebrew text where lines can be long
+        // paragraphs; showing the whole line is not useful.
+        public const int DefaultSnippetLength = 120;
+        public const int DefaultContextWords  = 8;
+
+        [System.ThreadStatic]
+        private static SnippetBuilder _builder;
+        [System.ThreadStatic]
+        private static int _builderSnippetLength;
+        [System.ThreadStatic]
+        private static int _builderContextWords;
+
+        private static SnippetBuilder GetBuilder(int snippetLength, int contextWords)
+        {
+            if (_builder == null
+                || _builderSnippetLength != snippetLength
+                || _builderContextWords  != contextWords)
+            {
+                _builder             = new SnippetBuilder(snippetLength: snippetLength, contextWords: contextWords);
+                _builderSnippetLength = snippetLength;
+                _builderContextWords  = contextWords;
+            }
+            return _builder;
+        }
 
         // ── Primary path: content already in hand ────────────────────
 
@@ -38,24 +63,28 @@ namespace FtsLib.Seforim
         internal static SnippetResult Generate(
             string                                         content,
             IReadOnlyList<IReadOnlyCollection<string>>     queryGroups,
-            bool                                           requireOrdered = false,
-            int                                            originalGroupCount = 0)
+            bool                                           requireOrdered     = false,
+            int                                            originalGroupCount = 0,
+            int                                            snippetLength      = DefaultSnippetLength,
+            int                                            contextWords       = DefaultContextWords)
         {
             if (string.IsNullOrEmpty(content) || queryGroups == null || queryGroups.Count == 0)
                 return SnippetResult.NoMatch;
 
-            var inner = _builder.Build(content, queryGroups, requireOrdered, originalGroupCount);
+            var inner = GetBuilder(snippetLength, contextWords).Build(content, queryGroups, requireOrdered, originalGroupCount);
             return new SnippetResult(inner.Html, inner.Score, inner.WordDistance, inner.IsMatch);
         }
 
         internal static SnippetResult Generate(
             string                content,
-            IReadOnlyList<string> queryTerms)
+            IReadOnlyList<string> queryTerms,
+            int                   snippetLength = DefaultSnippetLength,
+            int                   contextWords  = DefaultContextWords)
         {
             if (string.IsNullOrEmpty(content) || queryTerms == null || queryTerms.Count == 0)
                 return SnippetResult.NoMatch;
 
-            var inner = _builder.Build(content, queryTerms);
+            var inner = GetBuilder(snippetLength, contextWords).Build(content, queryTerms);
             return new SnippetResult(inner.Html, inner.Score, inner.WordDistance, inner.IsMatch);
         }
 
@@ -70,7 +99,9 @@ namespace FtsLib.Seforim
         internal static SnippetResult GenerateFromDb(
             int                   lineId,
             IReadOnlyList<string> queryTerms,
-            string                dbPath)
+            string                dbPath,
+            int                   snippetLength = DefaultSnippetLength,
+            int                   contextWords  = DefaultContextWords)
         {
             if (queryTerms == null || queryTerms.Count == 0)
                 return SnippetResult.NoMatch;
@@ -79,7 +110,7 @@ namespace FtsLib.Seforim
             {
                 string content = db.GetLineContent(lineId);
                 if (content == null) return SnippetResult.NoMatch;
-                return Generate(content, queryTerms);
+                return Generate(content, queryTerms, snippetLength, contextWords);
             }
         }
     }

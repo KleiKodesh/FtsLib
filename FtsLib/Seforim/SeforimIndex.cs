@@ -42,6 +42,12 @@ namespace FtsLib.Seforim
         private readonly string _indexPath;
         private readonly string _dbPath;
 
+        /// <summary>Default visible-character budget for the snippet window.</summary>
+        public const int DefaultSnippetLength = SnippetPipeline.DefaultSnippetLength;
+
+        /// <summary>Default number of words of context shown on each side of the match.</summary>
+        public const int DefaultContextWords = SnippetPipeline.DefaultContextWords;
+
         /// <param name="indexPath">
         /// Directory where the FTS index segment files are stored.
         /// Will be created on first <see cref="BuildIndex"/> call if it does not exist.
@@ -63,6 +69,22 @@ namespace FtsLib.Seforim
         // ── Build ─────────────────────────────────────────────────────
 
         /// <summary>
+        /// Returns the last line ID that was flushed to disk in a previous interrupted
+        /// build, or 0 if no interrupted build exists. Use this to show the user that
+        /// a resume is in progress rather than a fresh build.
+        /// </summary>
+        public int GetResumeLineId() => IndexingPipeline.ReadResumeLineId(_indexPath);
+
+        /// <summary>
+        /// Deletes the build progress file. Call this after the build completes and
+        /// the version stamp is written, so a subsequent startup does not mistake a
+        /// finished index for an interrupted one.
+        /// </summary>
+        public void DeleteBuildProgressFile() => IndexingPipeline.DeleteProgressFile(_indexPath);
+
+
+
+        /// <summary>
         /// Returns the total number of lines in the seforim database.
         /// Useful for computing build progress percentage.
         /// </summary>
@@ -73,20 +95,45 @@ namespace FtsLib.Seforim
         }
 
         /// <summary>
-        /// Builds (or rebuilds) the full-text index from the seforim database.
-        /// This is a blocking, long-running operation (~17 min for the full DB).
+        /// Returns the number of lines with id &lt;= <paramref name="upToId"/>.
+        /// Used to compute the correct starting offset for progress percentage
+        /// when resuming an interrupted build.
         /// </summary>
-        /// <param name="limit">
-        /// Maximum number of lines to index. 0 (default) = all lines.
-        /// Pass a smaller value (e.g. 500_000) for faster partial builds during testing.
-        /// </param>
-        /// <param name="onProgress">
-        /// Optional callback invoked after each line is processed.
-        /// Receives the running count of lines indexed so far.
-        /// Useful for driving a progress bar or console output.
-        /// </param>
-        public void BuildIndex(int limit = 0, Action<long> onProgress = null)
-            => IndexingPipeline.Build(_indexPath, _dbPath, limit, onProgress);
+        public long CountLinesUpTo(int upToId)
+        {
+            using (var db = new Misc.ZayitDb(_dbPath))
+                return db.CountLinesUpTo(upToId);
+        }
+
+        /// <summary>
+        /// Builds (or rebuilds) the full-text index from the seforim database.
+        /// This is a blocking, long-running operation.
+        ///
+        /// The index is searchable as soon as this method returns. Call
+        /// <see cref="Optimize"/> afterwards (e.g. on a background thread) to
+        /// merge all segments into one for the fastest possible search performance.
+        ///
+        /// Throws <see cref="OperationCanceledException"/> if <paramref name="ct"/>
+        /// is cancelled — the partial index on disk is valid and can be resumed on
+        /// the next call.
+        ///
+        /// Returns true if indexing ran to completion (all lines processed).
+        /// Returns false if no lines were available to index (e.g. only WAL recovery
+        /// ran, or the DB is empty) — the caller should not treat this as a completed
+        /// build and must not write the version stamp.
+        /// </summary>
+        public bool BuildIndex(int limit = 0, Action<long> onProgress = null,
+                               System.Threading.CancellationToken ct = default)
+            => IndexingPipeline.Build(_indexPath, _dbPath, limit, onProgress, ct);
+
+        /// <summary>
+        /// Force-merges all index segments into one for the fastest possible search.
+        /// Optional — search works correctly across any number of segments.
+        /// Call this after <see cref="BuildIndex"/> returns, on a background thread,
+        /// so the app can start serving searches immediately while the merge runs.
+        /// </summary>
+        public void Optimize()
+            => IndexingPipeline.Optimize(_indexPath);
 
         // ── Search ────────────────────────────────────────────────────
 
@@ -172,7 +219,13 @@ namespace FtsLib.Seforim
         /// appear in the same left-to-right order as the query groups.
         /// False (default) = unordered, any arrangement satisfies the match.
         /// </param>
-        public SnippetResult GenerateSnippet(SearchResult result, bool requireOrdered = false)
+        /// <param name="contextWords">
+        /// Number of words of context shown on each side of the match window.
+        /// Defaults to <see cref="DefaultContextWords"/> (8).
+        /// </param>
+        public SnippetResult GenerateSnippet(SearchResult result, bool requireOrdered = false,
+            int snippetLength = DefaultSnippetLength,
+            int contextWords = DefaultContextWords)
         {
             if (result == null) return SnippetResult.NoMatch;
             if (result.MatchedGroups.Count > 0)
@@ -180,7 +233,9 @@ namespace FtsLib.Seforim
                     result.Content,
                     result.MatchedGroups,
                     requireOrdered,
-                    result.OriginalGroupCount);
+                    result.OriginalGroupCount,
+                    snippetLength,
+                    contextWords);
             return SnippetResult.NoMatch;
         }
     }

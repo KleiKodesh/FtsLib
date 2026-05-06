@@ -38,9 +38,18 @@ namespace FtsLib.Core
         {
             if (Done || _fs.Position >= _fs.Length) { Done = true; return false; }
 
-            int    termLen     = _br.ReadInt32();
-            byte[] termBytes   = _br.ReadBytes(termLen);
-            int    chunkLen    = _br.ReadInt32();
+            int termLen = _br.ReadInt32();
+            if (termLen < 0 || termLen > 4096)
+                throw new InvalidDataException(
+                    $"Corrupt segment: invalid termLen {termLen} at offset {_fs.Position - 4}");
+
+            byte[] termBytes = _br.ReadBytes(termLen);
+
+            int chunkLen = _br.ReadInt32();
+            if (chunkLen < 0 || chunkLen > 64 * 1024 * 1024)
+                throw new InvalidDataException(
+                    $"Corrupt segment: invalid chunkLen {chunkLen} at offset {_fs.Position - 4}");
+
             int    count       = _br.ReadInt32();
             uint   lastEncoded = _br.ReadUInt32();
             byte[] chunk       = _br.ReadBytes(chunkLen);

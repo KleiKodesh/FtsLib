@@ -50,6 +50,21 @@ namespace FtsLib.Misc
             }
         }
 
+        /// <summary>
+        /// Returns the number of lines with id &lt;= <paramref name="upToId"/>.
+        /// Used to compute the correct progress offset when resuming an interrupted build.
+        /// </summary>
+        public long CountLinesUpTo(int upToId)
+        {
+            EnsureOpen();
+            using (var cmd = _connection.CreateCommand())
+            {
+                cmd.CommandText = "SELECT COUNT(*) FROM line WHERE id <= @id";
+                cmd.Parameters.AddWithValue("@id", upToId);
+                return (long)cmd.ExecuteScalar();
+            }
+        }
+
         public string GetLineContent(int id)
         {
             EnsureOpen();
@@ -62,7 +77,8 @@ namespace FtsLib.Misc
             }
         }
 
-        public IEnumerable<(int Id, string Content)> ReadLines(int limit)
+        public IEnumerable<(int Id, string Content)> ReadLines(int limit,
+            System.Threading.CancellationToken ct = default)
         {
             EnsureOpen();
             using (var cmd = _connection.CreateCommand())
@@ -74,7 +90,36 @@ namespace FtsLib.Misc
 
                 using (var r = cmd.ExecuteReader())
                     while (r.Read())
+                    {
+                        ct.ThrowIfCancellationRequested();
                         yield return (r.GetInt32(0), r.IsDBNull(1) ? string.Empty : r.GetString(1));
+                    }
+            }
+        }
+
+        /// <summary>
+        /// Streams all lines with id strictly greater than <paramref name="afterId"/>,
+        /// in ascending id order. Used to resume an interrupted index build from the
+        /// last successfully flushed line.
+        /// </summary>
+        public IEnumerable<(int Id, string Content)> ReadLinesFrom(int afterId, int limit = 0,
+            System.Threading.CancellationToken ct = default)
+        {
+            EnsureOpen();
+            using (var cmd = _connection.CreateCommand())
+            {
+                cmd.CommandText = limit > 0
+                    ? "SELECT id, content FROM line WHERE id > @after ORDER BY id LIMIT @lim"
+                    : "SELECT id, content FROM line WHERE id > @after ORDER BY id";
+                cmd.Parameters.AddWithValue("@after", afterId);
+                if (limit > 0) cmd.Parameters.AddWithValue("@lim", limit);
+
+                using (var r = cmd.ExecuteReader())
+                    while (r.Read())
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        yield return (r.GetInt32(0), r.IsDBNull(1) ? string.Empty : r.GetString(1));
+                    }
             }
         }
 
