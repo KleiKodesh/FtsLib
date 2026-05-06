@@ -82,13 +82,18 @@ namespace FtsLib.Core
             File.Move(tmpDat, outDat);
             File.Move(tmpDb,  outDb);
 
-            _store.Wal.EndMerge(level, newSegId);
-
+            // Delete source segments BEFORE logging END_MERGE. This ensures that if
+            // the app crashes after END_MERGE but before PromoteSegment, recovery will
+            // find only the merged segment (not both the merged segment and the sources).
+            // If the crash happens before END_MERGE, recovery will find the sources
+            // (the merged segment gets deleted and the merge is re-run).
             foreach (int sid in segIds)
             {
                 DeleteIfExists(_store.Live.SegDatPath(level, sid));
                 DeleteIfExists(_store.Live.SegDbPath(level, sid));
             }
+
+            _store.Wal.EndMerge(level, newSegId);
 
             _store.Live.PromoteSegment(level, segIds, nextLevel, newSegId);
 
