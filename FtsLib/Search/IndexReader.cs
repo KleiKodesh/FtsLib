@@ -145,7 +145,13 @@ namespace FtsLib.Search
                 using (var r = seg.Lookup.ExecuteReader())
                 {
                     if (r.Read())
-                        result.Add(new SegmentChunk(seg, r.GetInt64(0), r.GetInt32(1), r.GetInt32(2)));
+                        result.Add(new SegmentChunk(seg,
+                            r.GetInt64(0),  // skip_offset
+                            r.GetInt32(1),  // skip_count
+                            r.GetInt64(2),  // offset
+                            r.GetInt32(3),  // length
+                            r.GetInt32(4)   // count
+                        ));
                 }
             }
             return result;
@@ -173,10 +179,49 @@ namespace FtsLib.Search
 
         private static PostingIterator LoadChunk(SegmentChunk chunk)
         {
-            var buf = new byte[chunk.Length];
-            chunk.Seg.DataStream.Seek(chunk.Offset, SeekOrigin.Begin);
-            chunk.Seg.DataStream.Read(buf, 0, chunk.Length);
-            return new PostingIterator(buf, chunk.Length, null, 0);
+            int skipBytes  = chunk.SkipCount * 3 * sizeof(int); // 12 bytes per entry
+            int totalBytes = skipBytes + chunk.Length;
+
+            var buf = new byte[totalBytes];
+            chunk.Seg.DataStream.Seek(chunk.SkipCount > 0 ? chunk.SkipOffset : chunk.Offset,
+                                      SeekOrigin.Begin);
+
+            // FileStream.Read may return fewer bytes than requested — read in a loop
+            // to guarantee the full buffer is populated before decoding.
+            int read = 0;
+            while (read < totalBytes)
+            {
+                int n = chunk.Seg.DataStream.Read(buf, read, totalBytes - read);
+                if (n == 0) break; // end of stream — should never happen on a valid segment
+                read += n;
+            }
+
+            // Deserialise skip table from the front of the buffer.
+            int[] skip    = null;
+            int   skipLen = 0;
+            if (chunk.SkipCount > 0)
+            {
+                skipLen = chunk.SkipCount * 3;
+                skip    = new int[skipLen];
+                for (int i = 0; i < skipLen; i++)
+                    skip[i] = BitConverter.ToInt32(buf, i * sizeof(int));
+            }
+
+            // Posting bytes follow immediately after the skip table.
+            // Since PostingIterator reads from index 0, copy the posting slice to a
+            // separate array when a skip table precedes it.
+            byte[] postBuf;
+            if (skipBytes == 0)
+            {
+                postBuf = buf; // no skip table — buf is already just posting bytes
+            }
+            else
+            {
+                postBuf = new byte[chunk.Length];
+                Buffer.BlockCopy(buf, skipBytes, postBuf, 0, chunk.Length);
+            }
+
+            return new PostingIterator(postBuf, chunk.Length, skip, skipLen);
         }
 
         // ── Dispose ──────────────────────────────────────────────────
@@ -185,7 +230,8 @@ namespace FtsLib.Search
         {
             if (_disposed) return;
             _disposed = true;
-            foreach (var seg in _segments) seg.Dispose();
+            foreach (var seg in _segments)
+                seg.Dispose();
             _segments.Clear();
         }
     }

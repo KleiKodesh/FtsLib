@@ -1,8 +1,7 @@
 using FtsLib.Indexing;
 using FtsLib.Search;
 using System.Collections.Generic;
-using System.Threading;
-namespace FtsLib.SeforimDb
+using System.Threading;namespace FtsLib.SeforimDb
 {
     /// <summary>
     /// Executes a parsed query against the index and fetches matching rows

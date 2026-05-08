@@ -101,6 +101,9 @@ namespace FtsLib.SeforimDb
 
         public int GetResumeLineId() => IndexingPipeline.ReadResumeLineId(_indexPath);
 
+        public void GetResumeState(out int lineId, out long totalLines, out long resumeOffset)
+            => IndexingPipeline.ReadProgressFile(_indexPath, out lineId, out totalLines, out resumeOffset);
+
         public void DeleteBuildProgressFile() => IndexingPipeline.DeleteProgressFile(_indexPath);
 
         public long CountLines()
@@ -117,14 +120,17 @@ namespace FtsLib.SeforimDb
 
         public bool BuildIndex(int limit = 0, Action<long> onProgress = null,
                                Action onFlush = null,
+                               long totalLines = 0,
+                               long resumeOffset = 0,
                                CancellationToken ct = default)
         {
-            bool result = IndexingPipeline.Build(_indexPath, _dbPath, _store, limit, onProgress, onFlush, ct);
-            if (_store.IsWiped) ResetStore();
-            return result;
+            using (new IndexWriteLock(_indexPath))
+            {
+                bool result = IndexingPipeline.Build(_indexPath, _dbPath, _store, limit, totalLines, resumeOffset, onProgress, onFlush, ct);
+                if (_store.IsWiped) ResetStore();
+                return result;
+            }
         }
-
-        public void Optimize() => IndexingPipeline.Optimize(_indexPath, _store);
 
         // ── Search ────────────────────────────────────────────────────
 

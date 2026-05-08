@@ -71,13 +71,18 @@ namespace FtsLib.Indexing
             }
         }
 
-        internal int FindLevelWithMultiple()
+        /// <summary>
+        /// Returns all level numbers that currently have more than one live segment.
+        /// Used by MergeAllUnderWriteLock to drive the purge merge pass.
+        /// </summary>
+        internal List<int> GetLevelsWithMultiple()
         {
             lock (_lock)
             {
+                var result = new List<int>();
                 foreach (var kv in _liveSegs)
-                    if (kv.Value.Count >= 2) return kv.Key;
-                return -1;
+                    if (kv.Value.Count >= 2) result.Add(kv.Key);
+                return result;
             }
         }
 
@@ -149,7 +154,12 @@ namespace FtsLib.Indexing
         /// Scans the segment directory and rebuilds live state from the files on disk.
         /// Must be called before any background tasks start — not thread-safe.
         /// </summary>
-        internal void RebuildFromDisk()
+        /// <param name="maxSegId">
+        /// The highest segment ID found during the pre-scan (including .tmp files).
+        /// If >= 0, _nextSegId is set to maxSegId + 1. If -1, _nextSegId is computed
+        /// from the live segments found on disk.
+        /// </param>
+        internal void RebuildFromDisk(int maxSegId = -1)
         {
             _liveSegs.Clear();
             _nextSegId = 0;
@@ -165,6 +175,11 @@ namespace FtsLib.Indexing
                 AddToLiveUnlocked(level, segId);
                 if (segId >= _nextSegId) _nextSegId = segId + 1;
             }
+
+            // If a maxSegId was provided from the pre-scan, use it to ensure
+            // _nextSegId accounts for any .tmp files that were deleted.
+            if (maxSegId >= _nextSegId)
+                _nextSegId = maxSegId + 1;
 
             if (_liveSegs.Count > 0)
                 Console.WriteLine($"[Recovery] Found {TotalLiveSegs()} segment(s), nextSegId={_nextSegId}");
