@@ -37,7 +37,7 @@ namespace FtsLib.SeforimDb
         private          SegmentStore _store;
 
         /// <summary>Default visible-character budget for the snippet window.</summary>
-        public const int DefaultSnippetLength = SnippetPipeline.DefaultSnippetLength;
+        public const int DefaultSnippetLength = SnippetPipeline.DefaultContextWords; // kept for binary compat
 
         /// <summary>Default number of words of context shown on each side of the match.</summary>
         public const int DefaultContextWords = SnippetPipeline.DefaultContextWords;
@@ -165,8 +165,7 @@ namespace FtsLib.SeforimDb
         }
 
         public SnippetResult GenerateSnippet(SearchResult result, bool requireOrdered = false,
-            int snippetLength = DefaultSnippetLength,
-            int contextWords  = DefaultContextWords)
+            int contextWords = DefaultContextWords)
         {
             if (result == null) return SnippetResult.NoMatch;
             if (result.MatchedGroups.Count == 0) return SnippetResult.NoMatch;
@@ -175,7 +174,6 @@ namespace FtsLib.SeforimDb
                 result.MatchedGroups,
                 requireOrdered,
                 result.OriginalGroupCount,
-                snippetLength,
                 contextWords);
         }
     }

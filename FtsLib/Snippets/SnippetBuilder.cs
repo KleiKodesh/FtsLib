@@ -22,8 +22,11 @@ namespace FtsLib.Snippets
     {
         private readonly string _preTag;
         private readonly string _postTag;
-        private readonly int    _snippetLength;   // hard cap in visible chars — safety net
         private readonly int    _contextWords;    // words of context on each side of the match
+
+        // Safety ceiling in visible chars — only fires for pathologically long lines
+        // (e.g. a single paragraph with no word breaks). Normal lines never hit this.
+        private const int SafetyCeiling = 4000;
 
         private readonly TokenStream _tokenStream = new TokenStream();
 
@@ -38,15 +41,13 @@ namespace FtsLib.Snippets
         private readonly StringBuilder   _renderBuf  = new StringBuilder(512);
 
         public SnippetBuilder(
-            string preTag        = "<mark>",
-            string postTag       = "</mark>",
-            int    snippetLength = 400,
-            int    contextWords  = 8)
+            string preTag       = "<mark>",
+            string postTag      = "</mark>",
+            int    contextWords = 8)
         {
-            _preTag        = preTag;
-            _postTag       = postTag;
-            _snippetLength = snippetLength;
-            _contextWords  = contextWords;
+            _preTag       = preTag;
+            _postTag      = postTag;
+            _contextWords = contextWords;
         }
 
         // ── Public API ───────────────────────────────────────────────
@@ -254,12 +255,14 @@ namespace FtsLib.Snippets
         // ── Window expansion ──────────────────────────────────────────
 
         /// <summary>
-        /// Expands the match window (given as token indices iLeft..iRight) by up to
-        /// <see cref="_contextWords"/> tokens on each side, then caps the result so
-        /// the total visible-char count never exceeds <see cref="_snippetLength"/>.
+        /// Expands the match window (given as token indices iLeft..iRight) by
+        /// <see cref="_contextWords"/> tokens on each side.
         ///
-        /// Word-based expansion is exact — no char approximation needed because the
-        /// token list is already in hand from the tokenization step.
+        /// The visible-char span is read directly from the already-built token list
+        /// (tokens[sIdx].VisibleStart and tokens[eIdx].VisibleStart + word length) —
+        /// no second pass over the source string. A safety ceiling of
+        /// <see cref="SafetyCeiling"/> visible chars guards against pathological lines
+        /// that have no word breaks; it never fires on normal Hebrew text.
         ///
         /// Returns raw character positions (snapStart, snapEnd).
         /// </summary>
@@ -269,38 +272,36 @@ namespace FtsLib.Snippets
             if (iLeft < 0 || iRight < 0 || tokens.Count == 0)
                 return (0, rawLen);
 
-            // Total visible chars in the whole line.
-            int totalVisible = tokens[tokens.Count - 1].VisibleStart
-                               + tokens[tokens.Count - 1].Normalized.Length;
-
-            // If the whole line fits within the hard cap, show it all.
-            if (totalVisible <= _snippetLength)
-                return (0, rawLen);
-
-            // Expand by word count on each side.
+            // Expand by word count on each side — exact, reads from the token list.
             int sIdx = System.Math.Max(0,              iLeft  - _contextWords);
             int eIdx = System.Math.Min(tokens.Count-1, iRight + _contextWords);
 
-            // Hard-cap: trim tokens from the outside until visible chars fit.
-            // This only fires when contextWords is very large or the line is dense.
-            // Never trim past the match boundaries — iLeft..iRight must stay inside.
+            // Safety ceiling: trim from the outside only when the expanded window
+            // exceeds SafetyCeiling visible chars. Reads token positions — no rescan.
+            // Never trims past the match boundaries (iLeft..iRight must stay inside).
             while (sIdx < eIdx)
             {
                 int visStart = tokens[sIdx].VisibleStart;
                 int visEnd   = tokens[eIdx].VisibleStart + tokens[eIdx].Normalized.Length;
-                if (visEnd - visStart <= _snippetLength) break;
-                // Trim the side that contributes more chars, but never past the match.
+                if (visEnd - visStart <= SafetyCeiling) break;
                 bool canTrimLeft  = sIdx < iLeft;
                 bool canTrimRight = eIdx > iRight;
-                if (!canTrimLeft && !canTrimRight) break; // match itself exceeds cap — show it anyway
+                if (!canTrimLeft && !canTrimRight) break; // match itself exceeds ceiling — show it anyway
                 int trimLeft  = canTrimLeft  ? tokens[sIdx + 1].VisibleStart - visStart : int.MaxValue;
                 int trimRight = canTrimRight ? visEnd - (tokens[eIdx - 1].VisibleStart + tokens[eIdx - 1].Normalized.Length) : int.MaxValue;
                 if (trimLeft <= trimRight) sIdx++;
                 else                      eIdx--;
             }
 
-            int snapStart = tokens[sIdx].RawStart;
-            int snapEnd   = eIdx + 1 < tokens.Count ? tokens[eIdx + 1].RawStart : rawLen;
+            // snapStart: if we're showing from the first token of the line, start at 0
+            // so no ellipsis is prepended and no leading tag/whitespace is skipped.
+            // If we're mid-line, start at the first letter of the first context word.
+            int snapStart = sIdx == 0 ? 0 : tokens[sIdx].RawStart;
+
+            // snapEnd: use RawEnd of the last context token (includes its trailing
+            // separator chars) rather than RawStart of the next token, which would
+            // cut the gap between the last word and whatever follows it.
+            int snapEnd = eIdx + 1 < tokens.Count ? tokens[eIdx].RawEnd : rawLen;
 
             return (System.Math.Max(0, snapStart), System.Math.Min(rawLen, snapEnd));
         }
