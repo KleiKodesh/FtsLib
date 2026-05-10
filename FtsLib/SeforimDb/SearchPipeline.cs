@@ -1,7 +1,9 @@
 using FtsLib.Indexing;
 using FtsLib.Search;
 using System.Collections.Generic;
-using System.Threading;namespace FtsLib.SeforimDb
+using System.Threading;
+
+namespace FtsLib.SeforimDb
 {
     /// <summary>
     /// Executes a parsed query against the index and fetches matching rows
@@ -41,14 +43,19 @@ using System.Threading;namespace FtsLib.SeforimDb
             string            indexPath,
             string            dbPath,
             List<(string dat, string db)> livePaths,
+            SearchLease       lease,
             int               cap = 0,
             bool              expandKetiv = false,
             CancellationToken ct  = default)
         {
             var parsed = QueryParser.Parse(query);
-            if (parsed.IsEmpty) yield break;
+            if (parsed.IsEmpty)
+            {
+                lease?.Dispose();
+                yield break;
+            }
 
-            using (var reader = new IndexReader(indexPath, livePaths))
+            using (var reader = new IndexReader(indexPath, livePaths, lease))
             {
                 var groups         = new List<IEnumerable<string>>(parsed.Groups.Count);
                 var expandedGroups = new List<IReadOnlyCollection<string>>(parsed.Groups.Count);
@@ -107,13 +114,18 @@ using System.Threading;namespace FtsLib.SeforimDb
             string            query,
             string            indexPath,
             List<(string dat, string db)> livePaths,
+            SearchLease       lease,
             bool              expandKetiv = false,
             CancellationToken ct = default)
         {
             var parsed = QueryParser.Parse(query);
-            if (parsed.IsEmpty) yield break;
+            if (parsed.IsEmpty)
+            {
+                lease?.Dispose();
+                yield break;
+            }
 
-            using (var reader = new IndexReader(indexPath, livePaths))
+            using (var reader = new IndexReader(indexPath, livePaths, lease))
             {
                 var groups = new List<IEnumerable<string>>(parsed.Groups.Count);
 

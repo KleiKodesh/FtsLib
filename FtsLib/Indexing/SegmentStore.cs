@@ -101,6 +101,39 @@ namespace FtsLib.Indexing
             }
         }
 
+        /// <summary>
+        /// Returns a consistent snapshot of all live segment paths together with a
+        /// search lease that holds the read lock for the caller's lifetime.
+        ///
+        /// The caller MUST dispose the returned <see cref="SearchLease"/> when the
+        /// search is complete (i.e. when the <see cref="IndexReader"/> is disposed).
+        /// While the lease is held, any merge that needs to delete source segment
+        /// files will block on the write lock — guaranteeing that no file the reader
+        /// has open is deleted from under it.
+        ///
+        /// Throws <see cref="IndexMergingException"/> if a merge is currently in
+        /// progress — the caller should surface this to the user rather than blocking.
+        /// </summary>
+        public SearchLease AcquireSearchLease(out List<(string dat, string db)> livePaths)
+        {
+            // Non-blocking: if the write lock is held (merge in progress), fail fast.
+            if (!_searchMergeLock.TryEnterReadLock(0))
+                throw new IndexMergingException();
+
+            // Read lock is now held. Snapshot the live paths while holding it.
+            // The lease will release the lock when disposed.
+            try
+            {
+                livePaths = Live.GetLiveSegmentPaths();
+                return new SearchLease(_searchMergeLock);
+            }
+            catch
+            {
+                _searchMergeLock.ExitReadLock();
+                throw;
+            }
+        }
+
         // ── Recovery ─────────────────────────────────────────────────
 
         public void Recover()

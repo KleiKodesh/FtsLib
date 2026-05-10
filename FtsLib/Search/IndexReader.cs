@@ -20,17 +20,21 @@ namespace FtsLib.Search
     {
         private readonly List<SegmentHandle> _segments = new List<SegmentHandle>();
         private readonly DeleteSet           _deletes;
+        private readonly SearchLease         _lease;   // held for our lifetime; null when no store
         private bool _disposed;
 
         /// <summary>
-        /// Opens an IndexReader using an explicit snapshot of live segment paths.
-        /// Use this overload when a SegmentStore is available — it reads the live
-        /// path list under the store's lock, so the snapshot is consistent and never
-        /// races with a concurrent merge that is deleting source segments.
+        /// Opens an IndexReader using an explicit snapshot of live segment paths,
+        /// holding a <see cref="SearchLease"/> for the reader's entire lifetime.
+        ///
+        /// The lease keeps the store's read lock held so that any merge needing to
+        /// delete source segment files will block until this reader is disposed.
+        /// Use this overload whenever a <see cref="SegmentStore"/> is available.
         /// </summary>
-        public IndexReader(string indexPath, List<(string dat, string db)> livePaths)
+        public IndexReader(string indexPath, List<(string dat, string db)> livePaths, SearchLease lease)
             : base(indexPath)
         {
+            _lease   = lease;
             _deletes = DeleteSet.Load(DeletesFile);
             if (livePaths == null || livePaths.Count == 0) return;
 
@@ -42,6 +46,17 @@ namespace FtsLib.Search
                 if (File.Exists(dat) && File.Exists(db))
                     _segments.Add(new SegmentHandle(dat, db));
             }
+        }
+
+        /// <summary>
+        /// Opens an IndexReader using an explicit snapshot of live segment paths.
+        /// Use this overload when a SegmentStore is available — it reads the live
+        /// path list under the store's lock, so the snapshot is consistent and never
+        /// races with a concurrent merge that is deleting source segments.
+        /// </summary>
+        public IndexReader(string indexPath, List<(string dat, string db)> livePaths)
+            : this(indexPath, livePaths, lease: null)
+        {
         }
 
         /// <summary>
@@ -233,6 +248,9 @@ namespace FtsLib.Search
             foreach (var seg in _segments)
                 seg.Dispose();
             _segments.Clear();
+            // Release the search lease last — this unblocks any merge that was
+            // waiting for the write lock while we held open segment file handles.
+            _lease?.Dispose();
         }
     }
 }

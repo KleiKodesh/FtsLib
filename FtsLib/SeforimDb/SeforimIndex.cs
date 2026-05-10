@@ -91,11 +91,21 @@ namespace FtsLib.SeforimDb
         }
 
         /// <summary>
-        /// Returns a consistent snapshot of all live segment paths under the store lock.
-        /// Passed to SearchPipeline so IndexReader never races with a concurrent merge.
+        /// Returns a consistent snapshot of all live segment paths under the store lock,
+        /// together with a <see cref="SearchLease"/> that keeps the read lock held.
+        ///
+        /// The caller MUST dispose the lease when the corresponding
+        /// <see cref="IndexReader"/> is disposed, so that any pending merge is
+        /// unblocked as soon as the reader's file handles are closed.
         /// </summary>
-        internal List<(string dat, string db)> GetLiveSegmentPaths()
-            => _store != null ? _store.GetLiveSegmentPaths() : new List<(string, string)>();
+        internal SearchLease AcquireSearchLease(out List<(string dat, string db)> livePaths)
+        {
+            if (_store != null)
+                return _store.AcquireSearchLease(out livePaths);
+
+            livePaths = new List<(string, string)>();
+            return null;
+        }
 
         // ── Build ─────────────────────────────────────────────────────
 
@@ -135,10 +145,16 @@ namespace FtsLib.SeforimDb
         // ── Search ────────────────────────────────────────────────────
 
         public IEnumerable<SearchResult> Search(string query, int cap = 0, bool expandKetiv = false, CancellationToken ct = default)
-            => SearchPipeline.Search(query, _indexPath, _dbPath, GetLiveSegmentPaths(), cap, expandKetiv, ct);
+        {
+            var lease = AcquireSearchLease(out var livePaths);
+            return SearchPipeline.Search(query, _indexPath, _dbPath, livePaths, lease, cap, expandKetiv, ct);
+        }
 
         public IEnumerable<int> SearchIds(string query, bool expandKetiv = false, CancellationToken ct = default)
-            => SearchPipeline.SearchIds(query, _indexPath, GetLiveSegmentPaths(), expandKetiv, ct);
+        {
+            var lease = AcquireSearchLease(out var livePaths);
+            return SearchPipeline.SearchIds(query, _indexPath, livePaths, lease, expandKetiv, ct);
+        }
 
         // ── Snippets ──────────────────────────────────────────────────
 

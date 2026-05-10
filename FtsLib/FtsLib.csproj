@@ -117,6 +117,7 @@
     <Compile Include="Indexing\SegmentStore.cs" />
     <Compile Include="Indexing\SegmentWal.cs" />
     <Compile Include="Indexing\SegmentWriter.cs" />
+    <Compile Include="Indexing\SearchLease.cs" />
     <!-- Search: query execution, posting list iteration, expansion -->
     <Compile Include="Search\ConcatIterator.cs" />
     <Compile Include="Search\FilteringIterator.cs" />
