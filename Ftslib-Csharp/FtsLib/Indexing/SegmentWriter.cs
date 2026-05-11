@@ -116,6 +116,14 @@ namespace FtsLib.Indexing
         /// <summary>
         /// Writes a SQLite term-index (.db) file from a pre-built metadata list.
         /// Used by SegmentMerger after writing the merged .dat file.
+        ///
+        /// Schema:
+        ///   term_index   — one row per term: posting location + skip info
+        ///   trigram_index — one row per (trigram, term) pair: enables O(log n)
+        ///                   exact-match trigram lookup instead of O(n) LIKE scan.
+        ///                   Trigrams are all 3-char substrings of each term.
+        ///                   Terms shorter than 3 chars get their full text as a
+        ///                   single entry so they are still reachable by fuzzy search.
         /// </summary>
         internal static void WriteMetaDb(
             string path,
@@ -132,9 +140,12 @@ namespace FtsLib.Indexing
                     "CREATE TABLE term_index(" +
                     "term TEXT NOT NULL,skip_offset INTEGER NOT NULL,skip_count INTEGER NOT NULL," +
                     "offset INTEGER NOT NULL,length INTEGER NOT NULL,count INTEGER NOT NULL);");
+                Exec(conn,
+                    "CREATE TABLE trigram_index(trigram TEXT NOT NULL, term TEXT NOT NULL);");
 
                 using (var tx  = conn.BeginTransaction())
                 using (var ins = conn.CreateCommand())
+                using (var tri = conn.CreateCommand())
                 {
                     ins.CommandText =
                         "INSERT INTO term_index(term,skip_offset,skip_count,offset,length,count) " +
@@ -145,6 +156,12 @@ namespace FtsLib.Indexing
                     var pO  = ins.Parameters.Add("@o",  System.Data.DbType.Int64);
                     var pL  = ins.Parameters.Add("@l",  System.Data.DbType.Int32);
                     var pC  = ins.Parameters.Add("@c",  System.Data.DbType.Int32);
+
+                    tri.CommandText =
+                        "INSERT INTO trigram_index(trigram, term) VALUES(@g, @t)";
+                    var pG  = tri.Parameters.Add("@g", System.Data.DbType.String);
+                    var pTT = tri.Parameters.Add("@t", System.Data.DbType.String);
+
                     foreach (var (term, skipOff, skipCnt, off, len, cnt) in rows)
                     {
                         pT.Value  = term;
@@ -154,10 +171,36 @@ namespace FtsLib.Indexing
                         pL.Value  = len;
                         pC.Value  = cnt;
                         ins.ExecuteNonQuery();
+
+                        // Insert one trigram_index row per distinct trigram in this term.
+                        // Terms shorter than 3 chars use the full term as the "trigram"
+                        // so they remain reachable by fuzzy/wildcard expansion.
+                        pTT.Value = term;
+                        if (term.Length < 3)
+                        {
+                            pG.Value = term;
+                            tri.ExecuteNonQuery();
+                        }
+                        else
+                        {
+                            // Deduplicate trigrams per term to avoid redundant rows.
+                            string prev = null;
+                            for (int i = 0; i <= term.Length - 3; i++)
+                            {
+                                string g = term.Substring(i, 3);
+                                if (g == prev) continue;
+                                prev = g;
+                                pG.Value = g;
+                                tri.ExecuteNonQuery();
+                            }
+                        }
                     }
                     tx.Commit();
                 }
-                Exec(conn, "CREATE UNIQUE INDEX idx_term ON term_index(term);ANALYZE;");
+                Exec(conn,
+                    "CREATE UNIQUE INDEX idx_term ON term_index(term);" +
+                    "CREATE INDEX idx_trigram ON trigram_index(trigram);" +
+                    "ANALYZE;");
             }
         }
 
