@@ -137,57 +137,12 @@ namespace FtsLib.Search
         /// Missing terms (resolve returns IsDone=true) are silently skipped.
         /// If no terms produce any doc IDs the returned iterator is immediately done.
         ///
-        /// Parallel OR accumulation: the term list is split across
-        /// <see cref="Environment.ProcessorCount"/> partitions. Each partition drains
-        /// its posting lists into a private <see cref="RoaringBitmap"/> (no locking),
-        /// then the per-partition bitmaps are merged with <see cref="RoaringBitmap.Or"/>
-        /// (which uses SIMD bulk-OR on BitmapContainers). This parallelises the
-        /// decode + accumulate work across all available cores.
-        ///
         /// When the resolved iterator is itself a <see cref="RoaringBitmapIterator"/>
         /// (e.g. a cached sub-expansion), the underlying bitmap is merged via
-        /// <see cref="RoaringBitmap.Or"/> directly — no per-doc iteration needed.
+        /// <see cref="RoaringBitmap.Or"/> which uses a SIMD bulk-OR loop over the
+        /// 1024-word BitmapContainer arrays instead of per-doc <see cref="RoaringBitmap.Add"/>.
         /// </summary>
         private static RoaringBitmapIterator BuildRoaringIterator(
-            IReadOnlyList<string>         terms,
-            Func<string, PostingIterator> resolve,
-            CancellationToken             ct)
-        {
-            // For small lists the parallel overhead exceeds the gain — use the
-            // sequential path. Threshold chosen empirically: at ~32 terms the
-            // parallel setup cost is recovered within the first partition.
-            const int ParallelThreshold = 32;
-
-            if (terms.Count < ParallelThreshold)
-                return BuildRoaringIteratorSequential(terms, resolve, ct);
-
-            // The resolve delegate uses shared SQLiteCommand objects (one per
-            // SegmentHandle) which are not thread-safe. Parallel.For therefore
-            // cannot call resolve concurrently — instead each partition drains its
-            // slice sequentially, but all partitions run concurrently across cores.
-            // This is safe because each partition owns its own RoaringBitmap and
-            // never touches another partition's state.
-            //
-            // The shared SQLiteCommand constraint means we must partition the term
-            // list and call resolve from within each partition's own sequential loop,
-            // not share a single resolve call across threads. This is exactly what
-            // the code below does — each thread calls resolve(terms[i]) for its own
-            // slice, and resolve is only ever called from one thread at a time per
-            // term (since terms are partitioned, not shared).
-            //
-            // HOWEVER: resolve internally uses SegmentHandle.Lookup which is a single
-            // shared SQLiteCommand per segment. Multiple partitions calling resolve
-            // concurrently on different terms would still race on that command.
-            //
-            // Solution: fall back to sequential for now. The parallel path is
-            // architecturally correct but requires per-thread SQLite connections,
-            // which is a larger refactor. The trigram index (Option 1) already
-            // provides the primary speedup; parallel accumulation can be added later
-            // once IndexReader exposes a thread-safe resolve path.
-            return BuildRoaringIteratorSequential(terms, resolve, ct);
-        }
-
-        private static RoaringBitmapIterator BuildRoaringIteratorSequential(
             IReadOnlyList<string>         terms,
             Func<string, PostingIterator> resolve,
             CancellationToken             ct)
@@ -199,12 +154,16 @@ namespace FtsLib.Search
                 var it = resolve(term);
                 if (it.IsDone) continue;
 
+                // Fast path: if the resolved iterator wraps a RoaringBitmap (e.g. a
+                // cached wildcard expansion), merge the whole bitmap in one SIMD OR
+                // instead of calling Add() for every individual doc ID.
                 if (it is RoaringBitmapIterator rbIter)
                 {
                     bitmap.Or(rbIter.Bitmap);
                     continue;
                 }
 
+                // General path: drain the posting list one doc at a time.
                 while (it.MoveNext())
                     bitmap.Add(it.Current);
             }
