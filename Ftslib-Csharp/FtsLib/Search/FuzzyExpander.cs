@@ -99,7 +99,8 @@ namespace FtsLib.Search
 
         /// <summary>
         /// Queries each segment for terms containing at least one of the given n-grams.
-        /// Uses UNION strategy (OR across n-grams) to maximise recall.
+        /// Uses exact trigram_index lookup (O(log n) B-tree) when available,
+        /// falling back to LIKE scan for old segments without the trigram table.
         /// </summary>
         private static HashSet<string> QueryByNgrams(
             List<string>                 ngrams,
@@ -107,28 +108,39 @@ namespace FtsLib.Search
         {
             var results = new HashSet<string>(System.StringComparer.Ordinal);
 
-            // Build SQL once — parameter names match list indices exactly.
-            var sb = new StringBuilder("SELECT term FROM term_index WHERE ");
-            for (int i = 0; i < ngrams.Count; i++)
-            {
-                if (i > 0) sb.Append(" OR ");
-                sb.Append("term LIKE @t").Append(i).Append(" ESCAPE '\\'");
-            }
-            string sql = sb.ToString();
-
             foreach (var seg in segments)
             {
-                using (var cmd = seg.Conn.CreateCommand())
+                if (seg.HasTrigramIndex)
                 {
-                    cmd.CommandText = sql;
-                    // Add parameters in the same order as the SQL — list guarantees this.
+                    // Fast path: exact lookup on trigram_index — uses the B-tree index,
+                    // O(log n) per ngram instead of O(n) full table scan.
+                    foreach (var ngram in ngrams)
+                    {
+                        seg.TrigramLookup.Parameters["@g"].Value = ngram;
+                        using (var reader = seg.TrigramLookup.ExecuteReader())
+                            while (reader.Read())
+                                results.Add(reader.GetString(0));
+                    }
+                }
+                else
+                {
+                    // Fallback: old segment without trigram_index — use LIKE scan.
+                    var sb = new StringBuilder("SELECT term FROM term_index WHERE ");
                     for (int i = 0; i < ngrams.Count; i++)
-                        cmd.Parameters.Add($"@t{i}", System.Data.DbType.String).Value
-                            = "%" + EscapeLike(ngrams[i]) + "%";
-
-                    using (var reader = cmd.ExecuteReader())
-                        while (reader.Read())
-                            results.Add(reader.GetString(0));
+                    {
+                        if (i > 0) sb.Append(" OR ");
+                        sb.Append("term LIKE @t").Append(i).Append(" ESCAPE '\\'");
+                    }
+                    using (var cmd = seg.Conn.CreateCommand())
+                    {
+                        cmd.CommandText = sb.ToString();
+                        for (int i = 0; i < ngrams.Count; i++)
+                            cmd.Parameters.Add($"@t{i}", System.Data.DbType.String).Value
+                                = "%" + EscapeLike(ngrams[i]) + "%";
+                        using (var reader = cmd.ExecuteReader())
+                            while (reader.Read())
+                                results.Add(reader.GetString(0));
+                    }
                 }
             }
 

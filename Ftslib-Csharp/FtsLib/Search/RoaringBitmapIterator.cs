@@ -24,8 +24,15 @@ namespace FtsLib.Search
         public override int  Current => _current;
         public override bool IsDone  => _done;
 
+        /// <summary>
+        /// The underlying bitmap. Exposed so <see cref="PostingIntersector"/> can
+        /// merge it via <see cref="RoaringBitmap.Or"/> instead of iterating doc-by-doc.
+        /// </summary>
+        internal RoaringBitmap Bitmap { get; }
+
         public RoaringBitmapIterator(RoaringBitmap bitmap) : base()
         {
+            Bitmap      = bitmap;
             _enumerator = bitmap.GetValues().GetEnumerator();
         }
 
