@@ -122,198 +122,71 @@ namespace FtsLib.Search
         /// <summary>
         /// Queries every segment for terms matching <paramref name="pattern"/>
         /// (which must contain only '*' wildcards, no '?'), then filters out any
-        /// result where the wildcard portion exceeds the allowed affix length.
+        /// result where the wildcard portion exceeds <see cref="MaxWildcardChars"/>.
         ///
-        /// When the segment has a trigram_index, uses exact trigram lookup on the
-        /// anchor portion of the pattern (O(log n)) then filters results in memory.
-        /// Falls back to a LIKE scan for old segments without the trigram table.
+        /// Returns an empty list when the anchor is too short or nothing survives
+        /// the filter.
         /// </summary>
         public static List<string> ExpandStar(string pattern, IReadOnlyList<SegmentHandle> segments)
         {
             int anchorLen = AnchorLength(pattern);
+
+            // Reject anchor-too-short patterns (includes bare "*" and "*" with 1 char).
             if (anchorLen < MinAnchorLength)
                 return new List<string>();
 
-            // Extract the anchor — the non-wildcard portion of the pattern.
-            // For prefix (abc*) the anchor is the prefix; for suffix (*abc) it's the
-            // suffix; for infix (*abc*) it's the middle part.
-            string anchor      = StripWildcard(pattern);
             string likePattern = ToLikePattern(pattern);
-
-            bool hasLeadingStar  = pattern.StartsWith("*");
-            bool hasTrailingStar = pattern.EndsWith("*");
-
-            var raw = new HashSet<string>(StringComparer.Ordinal);
+            var    raw         = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (var seg in segments)
             {
-                if (seg.HasTrigramIndex && anchor.Length >= 3)
+                using (var cmd = seg.Conn.CreateCommand())
                 {
-                    // Fast path: look up trigrams of the anchor, then verify each
-                    // candidate against the full LIKE pattern in memory.
-                    // This replaces a full table scan with targeted B-tree lookups.
-                    var trigrams = FuzzyExpander.BuildNgrams(anchor, 3);
-                    // Use the least-common trigram to minimise candidates.
-                    // For now use the first one — all are equally selective for a
-                    // random anchor; a frequency table would be needed to do better.
-                    seg.TrigramLookup.Parameters["@g"].Value = trigrams[0];
-                    using (var reader = seg.TrigramLookup.ExecuteReader())
+                    cmd.CommandText =
+                        "SELECT term FROM term_index WHERE term LIKE @p ESCAPE '\\'";
+                    cmd.Parameters.Add("@p", System.Data.DbType.String).Value = likePattern;
+
+                    using (var reader = cmd.ExecuteReader())
                         while (reader.Read())
-                        {
-                            string term = reader.GetString(0);
-                            // Verify against the full pattern in memory — cheap string op.
-                            if (MatchesLike(term, likePattern))
-                                raw.Add(term);
-                        }
-                }
-                else
-                {
-                    // Fallback: LIKE scan (old segment or short anchor).
-                    using (var cmd = seg.Conn.CreateCommand())
-                    {
-                        cmd.CommandText =
-                            "SELECT term FROM term_index WHERE term LIKE @p ESCAPE '\\'";
-                        cmd.Parameters.Add("@p", System.Data.DbType.String).Value = likePattern;
-                        using (var reader = cmd.ExecuteReader())
-                            while (reader.Read())
-                                raw.Add(reader.GetString(0));
-                    }
+                            raw.Add(reader.GetString(0));
                 }
             }
 
-            // Filter by wildcard budget (same logic as before).
+            // Determine the wildcard budget per shape:
+            //   *abc  (suffix wildcard): leading '*' may match at most MaxPrefixWildcardChars
+            //   abc*  (prefix wildcard): trailing '*' may match at most MaxSuffixWildcardChars
+            //   *abc* (infix wildcard):  leading capped at MaxPrefixWildcardChars,
+            //                            trailing capped at MaxSuffixWildcardChars
+            bool hasLeadingStar  = pattern.StartsWith("*");
+            bool hasTrailingStar = pattern.EndsWith("*");
+
             var results = new List<string>(raw.Count);
             foreach (var term in raw)
             {
-                int extra = term.Length - anchorLen;
+                int extra = term.Length - anchorLen; // total wildcard chars matched
+
                 if (hasLeadingStar && hasTrailingStar)
                 {
+                    // Infix: we don't know the exact split, but the total extra chars
+                    // cannot exceed the combined budget.
                     if (extra <= MaxPrefixWildcardChars + MaxSuffixWildcardChars)
                         results.Add(term);
                 }
                 else if (hasLeadingStar)
                 {
+                    // Suffix wildcard (*abc): extra chars are all prefix.
                     if (extra <= MaxPrefixWildcardChars)
                         results.Add(term);
                 }
                 else
                 {
+                    // Prefix wildcard (abc*): extra chars are all suffix.
                     if (extra <= MaxSuffixWildcardChars)
                         results.Add(term);
                 }
             }
 
             return results;
-        }
-
-        /// <summary>
-        /// In-memory match of <paramref name="term"/> against a SQLite-style LIKE
-        /// <paramref name="likePattern"/> (where '%' = any sequence, '\' = escape).
-        ///
-        /// Dispatches to fast string primitives for the three common shapes that
-        /// arise from pure '*' patterns, and falls back to the general recursive
-        /// matcher only for complex patterns produced by '?' expansion.
-        ///
-        ///   prefix%          → StartsWith
-        ///   %suffix          → EndsWith
-        ///   %infix%          → Contains
-        ///   prefix%suffix    → StartsWith + EndsWith (non-overlapping)
-        ///   anything else    → recursive matcher
-        /// </summary>
-        private static bool MatchesLike(string term, string likePattern)
-        {
-            // Count and locate '%' wildcards (ignoring escaped ones).
-            int first = -1, second = -1, pctCount = 0;
-            for (int i = 0; i < likePattern.Length; i++)
-            {
-                if (likePattern[i] == '\\') { i++; continue; } // skip escaped char
-                if (likePattern[i] != '%') continue;
-                pctCount++;
-                if (first  < 0) first  = i;
-                else if (second < 0) second = i;
-            }
-
-            // ── Fast paths ────────────────────────────────────────────
-
-            if (pctCount == 0)
-            {
-                // No wildcards — exact match (after unescaping).
-                return string.Equals(term, UnescapeLike(likePattern), StringComparison.Ordinal);
-            }
-
-            if (pctCount == 1)
-            {
-                string before = UnescapeLike(likePattern.Substring(0, first));
-                string after  = UnescapeLike(likePattern.Substring(first + 1));
-
-                if (before.Length == 0)
-                    // %suffix — term must end with suffix
-                    return after.Length == 0 || term.EndsWith(after, StringComparison.Ordinal);
-
-                if (after.Length == 0)
-                    // prefix% — term must start with prefix
-                    return term.StartsWith(before, StringComparison.Ordinal);
-
-                // prefix%suffix — term must start with prefix AND end with suffix,
-                // and the two parts must not overlap.
-                return term.Length >= before.Length + after.Length
-                    && term.StartsWith(before, StringComparison.Ordinal)
-                    && term.EndsWith(after,   StringComparison.Ordinal);
-            }
-
-            if (pctCount == 2 && first == 0 && second == likePattern.Length - 1)
-            {
-                // %infix% — term must contain infix
-                string infix = UnescapeLike(likePattern.Substring(1, likePattern.Length - 2));
-                return infix.Length == 0 || term.IndexOf(infix, StringComparison.Ordinal) >= 0;
-            }
-
-            // ── General fallback (complex patterns from '?' expansion) ─
-            return LikeMatch(term, 0, likePattern, 0);
-        }
-
-        /// <summary>Removes LIKE escape characters ('\\' prefix) from a pattern segment.</summary>
-        private static string UnescapeLike(string s)
-        {
-            if (s.IndexOf('\\') < 0) return s; // fast path — nothing to unescape
-            var sb = new System.Text.StringBuilder(s.Length);
-            for (int i = 0; i < s.Length; i++)
-            {
-                if (s[i] == '\\' && i + 1 < s.Length) { i++; sb.Append(s[i]); }
-                else sb.Append(s[i]);
-            }
-            return sb.ToString();
-        }
-
-        private static bool LikeMatch(string text, int ti, string pattern, int pi)
-        {
-            while (pi < pattern.Length)
-            {
-                char p = pattern[pi];
-                if (p == '%')
-                {
-                    // Skip consecutive '%'
-                    while (pi < pattern.Length && pattern[pi] == '%') pi++;
-                    if (pi == pattern.Length) return true; // trailing % matches anything
-                    // Try matching the rest of the pattern at every position in text
-                    for (int i = ti; i <= text.Length; i++)
-                        if (LikeMatch(text, i, pattern, pi)) return true;
-                    return false;
-                }
-                else if (p == '\\' && pi + 1 < pattern.Length)
-                {
-                    // Escaped character — match literally
-                    pi++;
-                    if (ti >= text.Length || text[ti] != pattern[pi]) return false;
-                    ti++; pi++;
-                }
-                else
-                {
-                    if (ti >= text.Length || text[ti] != p) return false;
-                    ti++; pi++;
-                }
-            }
-            return ti == text.Length;
         }
 
         // ── '?' expansion helpers ─────────────────────────────────────
