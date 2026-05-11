@@ -44,6 +44,7 @@ namespace FtsLib.Indexing
         private const string LockFileName = "write.lock";
 
         private readonly FileStream _lockStream;
+        private readonly string     _lockFilePath;
 
         /// <summary>
         /// Acquires the exclusive write lock on <paramref name="indexPath"/>.
@@ -54,12 +55,12 @@ namespace FtsLib.Indexing
             if (!Directory.Exists(indexPath))
                 Directory.CreateDirectory(indexPath);
 
-            string lockFilePath = Path.Combine(indexPath, LockFileName);
+            _lockFilePath = Path.Combine(indexPath, LockFileName);
 
             try
             {
                 _lockStream = new FileStream(
-                    lockFilePath,
+                    _lockFilePath,
                     FileMode.OpenOrCreate,
                     FileAccess.ReadWrite,
                     FileShare.None);   // no other process or thread may open this file
@@ -75,6 +76,7 @@ namespace FtsLib.Indexing
             try
             {
                 _lockStream?.Dispose();
+                File.Delete(_lockFilePath);
             }
             catch { /* best-effort — lock is released when the stream is GC'd anyway */ }
         }

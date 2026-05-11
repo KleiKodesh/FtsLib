@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 /// Bottom sheet showing query syntax help.
@@ -8,7 +10,7 @@ class SyntaxHelpSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: ui.TextDirection.rtl,
       child: DraggableScrollableSheet(
         expand: false,
         initialChildSize: 0.85,

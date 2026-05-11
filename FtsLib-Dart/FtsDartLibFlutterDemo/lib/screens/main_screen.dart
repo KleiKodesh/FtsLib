@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
@@ -283,7 +284,7 @@ class _MainScreenState extends State<MainScreen> {
     final result = await showDialog<bool>(
       context: context,
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
           title: Text(title),
           content: Text(message),
@@ -305,7 +306,7 @@ class _MainScreenState extends State<MainScreen> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => Directionality(
-        textDirection: TextDirection.rtl,
+        textDirection: ui.TextDirection.rtl,
         child: AlertDialog(
           title: Text(title),
           content: Text(message),
@@ -336,7 +337,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Directionality(
-      textDirection: TextDirection.rtl,
+      textDirection: ui.TextDirection.rtl,
       child: Scaffold(
         backgroundColor: Colors.white,
         body: Column(
@@ -374,7 +375,7 @@ class _MainScreenState extends State<MainScreen> {
               Expanded(
                 child: TextField(
                   controller: _searchController,
-                  textDirection: TextDirection.rtl,
+                  textDirection: ui.TextDirection.rtl,
                   decoration: InputDecoration(
                     contentPadding:
                         const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
