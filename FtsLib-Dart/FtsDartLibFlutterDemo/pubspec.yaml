@@ -12,7 +12,7 @@ dependencies:
     sdk: flutter
   # Local path to the Dart FtsLib library
   fts_lib:
-    path: ../FtsLibDart
+    path: ../FtsDartLib
   # File picker for selecting the .db file
   file_picker: ^6.1.1
   # Persistent settings

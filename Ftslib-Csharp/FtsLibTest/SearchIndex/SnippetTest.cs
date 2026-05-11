@@ -148,7 +148,7 @@ namespace FtsLibTest
             string ellipsisSuffix = " אחד שתים שלש ארבע חמש שש שבע שמונה תשע עשר";
             string ellipsisContent = ellipsisPrefix + "שישים גבורים" + ellipsisSuffix;
 
-            var ellipsisBuilder = new SnippetBuilder(snippetLength: 40, contextWords: 1);
+            var ellipsisBuilder = new SnippetBuilder(contextWords: 1);
             var ellipsisResult = ellipsisBuilder.Build(
                 ellipsisContent,
                 (IReadOnlyList<IReadOnlyCollection<string>>)new[] { new[] { "שישים" }, new[] { "גבורים" } });
@@ -322,7 +322,7 @@ namespace FtsLibTest
             // Build a line where the two matched terms are far apart and the
             // total visible length far exceeds snippetLength. The trimming loop
             // in ExpandWindow must clamp at iLeft/iRight, not trim past them.
-            var longLineBuilder = new SnippetBuilder(snippetLength: 60, contextWords: 2);
+            var longLineBuilder = new SnippetBuilder(contextWords: 2);
             string filler = "אחד שתים שלש ארבע חמש שש שבע שמונה תשע עשר " +
                             "אחד שתים שלש ארבע חמש שש שבע שמונה תשע עשר " +
                             "אחד שתים שלש ארבע חמש שש שבע שמונה תשע עשר ";

@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 
 import '../services/index_service.dart';
@@ -30,7 +32,7 @@ class ResultCard extends StatelessWidget {
               fontSize: 18,
               color: Color(0xFF1A0DAB),
             ),
-            textDirection: TextDirection.rtl,
+            textDirection: ui.TextDirection.rtl,
           ),
           const SizedBox(height: 3),
 
@@ -54,7 +56,7 @@ class _SnippetText extends StatelessWidget {
   Widget build(BuildContext context) {
     return SelectableText.rich(
       _parseSnippet(html),
-      textDirection: TextDirection.rtl,
+      textDirection: ui.TextDirection.rtl,
       style: const TextStyle(
         fontSize: 13,
         color: Color(0xFF4D5156),
