@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FtsLib Dart Search Test Suite</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f7fa;
+        }
+        .report-block {
+            background: #fff;
+            border: 1px solid #dde3ec;
+            border-radius: 8px;
+            padding: 20px 24px;
+            margin-bottom: 28px;
+            box-shadow: 0 2px 8px rgba(0,0,0,.07);
+        }
+        .banner {
+            background: #0d1b2a;
+            color: #e0e7ff;
+            font-size: 1.2rem;
+            font-weight: 700;
+            padding: 12px 18px;
+            border-radius: 5px;
+            margin-bottom: 14px;
+            letter-spacing: .4px;
+        }
+        .meta {
+            display: flex;
+            gap: 10px;
+            padding: 3px 0;
+            font-size: 13px;
+            color: #444;
+        }
+        .meta-label { font-weight: 600; min-width: 160px; color: #1a3a5c; }
+        .meta-value { color: #222; }
+        .table-wrap { overflow-x: auto; margin: 10px 0 16px; }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            background: #fff;
+            border-radius: 5px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,.07);
+        }
+        th {
+            background: #1a3a5c;
+            color: #fff;
+            padding: 7px 11px;
+            text-align: left;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: .3px;
+        }
+        td {
+            padding: 6px 11px;
+            border-bottom: 1px solid #eef0f4;
+            font-size: 13px;
+        }
+        tr:last-child td { border-bottom: none; }
+        .success-row { background: #f0f9f0; }
+        .error-row { background: #fff0f0; }
+        .alert {
+            padding: 12px 16px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-weight: 500;
+        }
+        .alert-info {
+            background: #e3f2fd;
+            border: 1px solid #bbdefb;
+            color: #1565c0;
+        }
+        .alert-error {
+            background: #ffebee;
+            border: 1px solid #ffcdd2;
+            color: #c62828;
+        }
+        h2 {
+            color: #1a3a5c;
+            border-bottom: 2px solid #e0e7ff;
+            padding-bottom: 8px;
+            margin-top: 30px;
+            margin-bottom: 16px;
+        }
+        .test-result {
+            border: 1px solid #e0e7ff;
+            border-radius: 6px;
+            padding: 12px;
+            margin: 8px 0;
+            background: #fafbff;
+        }
+        .test-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .test-query {
+            font-family: 'Courier New', monospace;
+            font-weight: 600;
+            color: #1a3a5c;
+        }
+        .test-status {
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+        }
+        .success { background: #c8e6c9; color: #2e7d32; }
+        .error { background: #ffcdd2; color: #c62828; }
+        .test-details {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            color: #666;
+        }
+        .test-description { font-style: italic; }
+        .test-metrics { font-family: monospace; }
+    </style>
+</head>
+<body>
+    <div class="report-block">
+        <div class="banner">SEARCH TEST SUITE SETUP</div>
+      <div class="meta">
+        <span class="meta-label">Report Path</span>
+        <span class="meta-value">./search_test_report.html</span>
+      </div>
+    
+<h2>RAM Index Functionality Tests</h2>
+      <div class="meta">
+        <span class="meta-label">RAM Index Terms</span>
+        <span class="meta-value">7</span>
+      </div>
+    
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">torah</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Common term (should have 3 results)</span>
+        <span class="test-metrics">3 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">moses</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Biblical figure (should have 2 results)</span>
+        <span class="test-metrics">2 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">god</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Divine term (should have 1 result)</span>
+        <span class="test-metrics">1 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">israel</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Geographic term (should have 1 result)</span>
+        <span class="test-metrics">1 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">commandment</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Specific term (should have 1 result)</span>
+        <span class="test-metrics">1 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">law</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Legal term (should have 1 result)</span>
+        <span class="test-metrics">1 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">king</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Leadership term (should have 1 result)</span>
+        <span class="test-metrics">1 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">nonexistent</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Non-existent term (should have 0 results)</span>
+        <span class="test-metrics">0 results </span>
+      </div>
+    </div>
+  
+<h2>Database Connectivity Tests</h2>
+      <div class="meta">
+        <span class="meta-label">Database Status</span>
+        <span class="meta-value">Connected successfully</span>
+      </div>
+    
+      <div class="meta">
+        <span class="meta-label">Total Lines</span>
+        <span class="meta-value">5444192</span>
+      </div>
+    
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">line_count</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Count total lines</span>
+        <span class="test-metrics">5444192 results in 3ms</span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">line_content</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Get sample line content</span>
+        <span class="test-metrics">1 results in 6ms</span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">read_lines</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Read first 10 lines</span>
+        <span class="test-metrics">10 results in 5ms</span>
+      </div>
+    </div>
+  
+<h2>Tokenization Tests</h2>
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">torah moses</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Simple English words</span>
+        <span class="test-metrics">2 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">תורה משה</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Hebrew words</span>
+        <span class="test-metrics">2 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">Torah Moses God</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Mixed case English</span>
+        <span class="test-metrics">3 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">torah, moses; god!</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Punctuation handling</span>
+        <span class="test-metrics">3 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">123 torah 456</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Numbers and text</span>
+        <span class="test-metrics">1 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query"></span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Empty string</span>
+        <span class="test-metrics">0 results </span>
+      </div>
+    </div>
+  
+    <div class="test-result">
+      <div class="test-header">
+        <span class="test-query">a</span>
+        <span class="test-status success">✓ PASS</span>
+      </div>
+      <div class="test-details">
+        <span class="test-description">Single character</span>
+        <span class="test-metrics">1 results </span>
+      </div>
+    </div>
+  
+<h2>Performance Benchmarks</h2>
+      <div class="meta">
+        <span class="meta-label">RAM Add Rate</span>
+        <span class="meta-value">312500 ops/sec</span>
+      </div>
+    
+      <div class="meta">
+        <span class="meta-label">RAM Query Rate</span>
+        <span class="meta-value">Infinity ops/sec</span>
+      </div>
+    
+<h2>Test Results Summary</h2>
+      <div class="meta">
+        <span class="meta-label">Total Tests</span>
+        <span class="meta-value">20</span>
+      </div>
+    
+      <div class="meta">
+        <span class="meta-label">Passed</span>
+        <span class="meta-value">20</span>
+      </div>
+    
+      <div class="meta">
+        <span class="meta-label">Failed</span>
+        <span class="meta-value">0</span>
+      </div>
+    
+      <div class="meta">
+        <span class="meta-label">Success Rate</span>
+        <span class="meta-value">100.0%</span>
+      </div>
+    
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Query</th>
+            <th>Description</th>
+            <th>Results</th>
+            <th>Total Time</th>
+            <th>Avg Time</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+              <tr class="success-row">
+      <td>torah</td>
+      <td>Common term (should have 3 results)</td>
+      <td>3</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>moses</td>
+      <td>Biblical figure (should have 2 results)</td>
+      <td>2</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>god</td>
+      <td>Divine term (should have 1 result)</td>
+      <td>1</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>israel</td>
+      <td>Geographic term (should have 1 result)</td>
+      <td>1</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>commandment</td>
+      <td>Specific term (should have 1 result)</td>
+      <td>1</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>law</td>
+      <td>Legal term (should have 1 result)</td>
+      <td>1</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>king</td>
+      <td>Leadership term (should have 1 result)</td>
+      <td>1</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>nonexistent</td>
+      <td>Non-existent term (should have 0 results)</td>
+      <td>0</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>line_count</td>
+      <td>Count total lines</td>
+      <td>5444192</td>
+      <td>3ms</td>
+      <td>3.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>line_content</td>
+      <td>Get sample line content</td>
+      <td>1</td>
+      <td>6ms</td>
+      <td>6.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>read_lines</td>
+      <td>Read first 10 lines</td>
+      <td>10</td>
+      <td>5ms</td>
+      <td>5.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>torah moses</td>
+      <td>Simple English words</td>
+      <td>2</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>תורה משה</td>
+      <td>Hebrew words</td>
+      <td>2</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>Torah Moses God</td>
+      <td>Mixed case English</td>
+      <td>3</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>torah, moses; god!</td>
+      <td>Punctuation handling</td>
+      <td>3</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>123 torah 456</td>
+      <td>Numbers and text</td>
+      <td>1</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td></td>
+      <td>Empty string</td>
+      <td>0</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>a</td>
+      <td>Single character</td>
+      <td>1</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>RAM Index Add</td>
+      <td>Add 10,000 entries</td>
+      <td>10000</td>
+      <td>32ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+      <tr class="success-row">
+      <td>RAM Index Query</td>
+      <td>Query 1,000 times</td>
+      <td>1000</td>
+      <td>0ms</td>
+      <td>0.00ms</td>
+      <td>✓ PASS</td>
+    </tr>
+  
+        </tbody>
+      </table>
+    </div>
+  
+<h2>Performance Analysis</h2>
+      <div class="meta">
+        <span class="meta-label">Average Operation Time</span>
+        <span class="meta-value">0.70ms</span>
+      </div>
+    
+<h2>Conclusion</h2>
+<div class="alert alert-info">All tests passed successfully! FtsLib Dart core functionality is working correctly.</div>
+      <div class="meta">
+        <span class="meta-label">Total Test Time</span>
+        <span class="meta-value">443ms</span>
+      </div>
+    
+      <div class="meta">
+        <span class="meta-label">Test Completed</span>
+        <span class="meta-value">2026-05-11T22:41:16.625046</span>
+      </div>
+    
+
+    </div>
+</body>
+</html>
+    

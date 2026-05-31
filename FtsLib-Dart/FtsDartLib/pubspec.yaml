@@ -1,0 +1,26 @@
+name: fts_lib
+description: Full-text search library — Dart port of FtsLib (C#).
+version: 1.0.0
+
+# Performance note:
+# Always compile with AoT for production use — it is ~30% faster than JIT
+# for CPU-bound work (segment writes, merge, posting intersection).
+#   dart compile exe bin/fts_console_test.dart -o bin/fts_console_test.exe   (Windows)
+#   dart compile exe bin/fts_console_test.dart -o bin/fts_console_test        (Linux/macOS)
+# See compile_aot.bat / compile_aot.sh for convenience scripts.
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  path: ^1.9.0
+  # sqflite_common_ffi: async SQLite for ZayitDb and SegmentHandle LIKE queries.
+  # It bundles sqlite3 native library loading — call sqfliteFfiInit() first.
+  sqflite_common_ffi: ^2.3.0
+  # sqlite3: synchronous SQLite for the search hot path (term lookup) and
+  # segment writes. Reuses the native library already loaded by sqflite_common_ffi.
+  sqlite3: ^2.4.0
+
+dev_dependencies:
+  lints: ^3.0.0
+  test: ^1.24.0

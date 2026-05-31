@@ -1,0 +1,31 @@
+name: fts_lib_flutter_demo
+description: Flutter demo app for FtsLib — Hebrew full-text search.
+version: 1.0.0+1
+publish_to: none
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.10.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Local path to the Dart FtsLib library
+  fts_lib:
+    path: ../FtsDartLib
+  # File picker for selecting the .db file
+  file_picker: ^6.1.1
+  # Persistent settings
+  shared_preferences: ^2.2.2
+  # Intl for number formatting
+  intl: ^0.19.0
+  # path utilities (used by IndexService)
+  path: ^1.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
