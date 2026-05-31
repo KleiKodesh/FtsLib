@@ -43,3 +43,11 @@ Thumbs.db
 *.ps1
 query.sql
 notes.txt
+
+# Dart/Flutter generated and index data
+FtsLib-Dart/FtsDartLib/.dart_tool/
+FtsLib-Dart/FtsDartLib/build/
+FtsLib-Dart/FtsDartLib/index_*/
+FtsLib-Dart/FtsDartLib/search_test_index/
+FtsLib-Dart/FtsDartLib/test_sync.db
+FtsLib-Dart/FtsDartLibFlutterDemo/.metadata/
