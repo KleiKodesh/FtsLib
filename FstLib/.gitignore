@@ -1,0 +1,34 @@
+# Build results
+bin/
+obj/
+*.dll
+*.pdb
+*.nupkg
+*.nuspec
+
+# Visual Studio
+.vs/
+.vscode/
+*.user
+*.suo
+*.sln.docstates
+
+# IDE
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kiro
+.kiro/
+
+# Large data files
+*.dat
+*.db
+*.fst
+FstIndex/
+SqliteIndex/
+FstMetrics/
